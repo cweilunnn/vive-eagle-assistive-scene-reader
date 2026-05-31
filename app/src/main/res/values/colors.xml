@@ -1,0 +1,8 @@
+<resources>
+    <color name="reader_black">#000000</color>
+    <color name="reader_white">#FFFFFF</color>
+    <color name="reader_yellow">#FFD400</color>
+    <color name="reader_green">#00D084</color>
+    <color name="reader_red">#FF4D4D</color>
+</resources>
+
