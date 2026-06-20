@@ -10,11 +10,11 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
-import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -22,6 +22,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -33,29 +35,35 @@ import tw.edu.nchu.viveeagle.assistivereader.eagle.EagleAdapterFactory;
 import tw.edu.nchu.viveeagle.assistivereader.eagle.EagleEventListener;
 import tw.edu.nchu.viveeagle.assistivereader.eagle.EagleSdkAdapter;
 import tw.edu.nchu.viveeagle.assistivereader.vision.MockSceneAnalyzer;
+import tw.edu.nchu.viveeagle.assistivereader.vision.SceneAnalyzer;
+import tw.edu.nchu.viveeagle.assistivereader.vision.SceneAnalyzerFactory;
 import tw.edu.nchu.viveeagle.assistivereader.vision.SceneAnalysisResult;
 import tw.edu.nchu.viveeagle.assistivereader.vision.SceneRiskLevel;
 
 public class MainActivity extends Activity implements EagleEventListener {
     private static final int REQUEST_PERMISSIONS = 1101;
+    private static final int REQUEST_PICK_IMAGE = 1102;
 
     private EagleSdkAdapter eagleAdapter;
-    private MockSceneAnalyzer sceneAnalyzer;
+    private SceneAnalyzer sceneAnalyzer;
+    private final MockSceneAnalyzer mockFallbackAnalyzer = new MockSceneAnalyzer();
     private TextView connectionStatus;
     private TextView permissionStatus;
+    private TextView analysisModeStatus;
     private TextView primaryResult;
     private TextView detailResult;
     private TextView eventLog;
     private ImageView capturedImage;
     private Button connectButton;
     private Button captureButton;
+    private Button selectPhotoButton;
     private Button speakButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         eagleAdapter = EagleAdapterFactory.create(this);
-        sceneAnalyzer = new MockSceneAnalyzer();
+        sceneAnalyzer = SceneAnalyzerFactory.create();
         buildHighContrastUi();
         refreshPermissionStatus();
     }
@@ -63,6 +71,8 @@ public class MainActivity extends Activity implements EagleEventListener {
     @Override
     protected void onDestroy() {
         eagleAdapter.release();
+        sceneAnalyzer.release();
+        mockFallbackAnalyzer.release();
         super.onDestroy();
     }
 
@@ -86,13 +96,24 @@ public class MainActivity extends Activity implements EagleEventListener {
         permissionStatus = label("", 20, Color.WHITE);
         root.addView(permissionStatus);
 
+        analysisModeStatus = label(
+                "分析模式：" + sceneAnalyzer.displayName(),
+                20,
+                sceneAnalyzer.isRealAi() ? Color.GREEN : Color.YELLOW
+        );
+        root.addView(analysisModeStatus);
+
         connectButton = actionButton("連線眼鏡");
         connectButton.setOnClickListener(view -> connectToGlasses());
         root.addView(connectButton);
 
-        captureButton = actionButton("拍照辨識");
+        captureButton = actionButton("模擬眼鏡拍照");
         captureButton.setOnClickListener(view -> captureFromGlasses("手機按鈕"));
         root.addView(captureButton);
+
+        selectPhotoButton = actionButton("選擇真實照片給 AI");
+        selectPhotoButton.setOnClickListener(view -> selectPhotoForAi());
+        root.addView(selectPhotoButton);
 
         speakButton = actionButton("重念提醒");
         speakButton.setOnClickListener(view -> speakCurrentResult());
@@ -102,7 +123,13 @@ public class MainActivity extends Activity implements EagleEventListener {
         primaryResult.setGravity(Gravity.START);
         root.addView(primaryResult);
 
-        detailResult = label("安全提醒會顯示在這裡。第一版使用 mock AI 結果，確認流程穩定後再接 vision API。", 22, Color.WHITE);
+        detailResult = label(
+                sceneAnalyzer.isRealAi()
+                        ? "可選擇手機中的真實照片交給 Gemini AI 分析。AI 只提供輔助提醒，不可取代白手杖或人類判斷。"
+                        : "尚未設定 Gemini API key，目前使用 Mock 預設情境。",
+                22,
+                Color.WHITE
+        );
         root.addView(detailResult);
 
         capturedImage = new ImageView(this);
@@ -186,6 +213,51 @@ public class MainActivity extends Activity implements EagleEventListener {
         String text = primaryResult.getText().toString();
         appendLog("呼叫 speakText()");
         eagleAdapter.speakText(text, Locale.TAIWAN);
+    }
+
+    private void selectPhotoForAi() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        startActivityForResult(intent, REQUEST_PICK_IMAGE);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_PICK_IMAGE || resultCode != RESULT_OK || data == null) {
+            return;
+        }
+
+        Uri imageUri = data.getData();
+        if (imageUri == null) {
+            return;
+        }
+
+        try {
+            String mimeType = getContentResolver().getType(imageUri);
+            byte[] imageBytes;
+            try (InputStream input = getContentResolver().openInputStream(imageUri)) {
+                imageBytes = readBytes(input);
+            }
+            appendLog("已選擇真實照片：" + imageBytes.length + " bytes");
+            processImage(imageBytes, mimeType == null ? "image/jpeg" : mimeType);
+        } catch (Exception exception) {
+            onError("讀取照片失敗：" + exception.getMessage(), exception);
+        }
+    }
+
+    private byte[] readBytes(InputStream input) throws Exception {
+        if (input == null) {
+            throw new IllegalArgumentException("無法開啟照片");
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
     }
 
     private void refreshPermissionStatus() {
@@ -277,16 +349,79 @@ public class MainActivity extends Activity implements EagleEventListener {
     public void onImageCaptured(byte[] imageBytes) {
         runOnUiThread(() -> {
             appendLog("onImageCaptured(" + imageBytes.length + " bytes)");
-            Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
-            if (bitmap != null) {
-                capturedImage.setImageBitmap(bitmap);
-            }
-            SceneAnalysisResult result = sceneAnalyzer.analyze(imageBytes);
-            primaryResult.setText(result.headline);
-            primaryResult.setTextColor(colorForRisk(result.riskLevel));
-            detailResult.setText(result.detail);
-            eagleAdapter.speakText(result.spokenText, Locale.TAIWAN);
+            processImage(imageBytes, "image/jpeg");
         });
+    }
+
+    private void processImage(byte[] imageBytes, String mimeType) {
+        Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+        if (bitmap == null) {
+            onError("照片格式無法顯示。", null);
+            return;
+        }
+        capturedImage.setImageBitmap(bitmap);
+        primaryResult.setText(sceneAnalyzer.isRealAi() ? "AI 正在分析照片…" : "Mock 正在產生情境…");
+        primaryResult.setTextColor(Color.YELLOW);
+        detailResult.setText("請稍候。分析模式：" + sceneAnalyzer.displayName());
+        setAnalysisBusy(true);
+        appendLog("開始分析：" + sceneAnalyzer.displayName());
+
+        sceneAnalyzer.analyze(imageBytes, mimeType, new SceneAnalyzer.Callback() {
+            @Override
+            public void onSuccess(SceneAnalysisResult result) {
+                runOnUiThread(() -> {
+                    setAnalysisBusy(false);
+                    analysisModeStatus.setText("分析模式：" + sceneAnalyzer.displayName());
+                    analysisModeStatus.setTextColor(sceneAnalyzer.isRealAi() ? Color.GREEN : Color.YELLOW);
+                    applyAnalysisResult(result);
+                    appendLog("分析完成：" + result.riskLevel.name());
+                });
+            }
+
+            @Override
+            public void onError(String message, Throwable throwable) {
+                runOnUiThread(() -> {
+                    appendLog(message);
+                    analysisModeStatus.setText("AI 失敗，本次改用 Mock 結果");
+                    analysisModeStatus.setTextColor(Color.RED);
+                    mockFallbackAnalyzer.analyze(imageBytes, mimeType, new SceneAnalyzer.Callback() {
+                        @Override
+                        public void onSuccess(SceneAnalysisResult result) {
+                            runOnUiThread(() -> {
+                                setAnalysisBusy(false);
+                                SceneAnalysisResult fallback = new SceneAnalysisResult(
+                                        result.riskLevel,
+                                        result.headline,
+                                        "注意：Gemini AI 呼叫失敗，本次為 Mock fallback。\n" + result.detail,
+                                        result.spokenText
+                                );
+                                applyAnalysisResult(fallback);
+                            });
+                        }
+
+                        @Override
+                        public void onError(String ignored, Throwable ignoredThrowable) {
+                            runOnUiThread(() -> {
+                                setAnalysisBusy(false);
+                                MainActivity.this.onError(message, throwable);
+                            });
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    private void applyAnalysisResult(SceneAnalysisResult result) {
+        primaryResult.setText(result.headline);
+        primaryResult.setTextColor(colorForRisk(result.riskLevel));
+        detailResult.setText(result.detail);
+        eagleAdapter.speakText(result.spokenText, Locale.TAIWAN);
+    }
+
+    private void setAnalysisBusy(boolean busy) {
+        captureButton.setEnabled(!busy);
+        selectPhotoButton.setEnabled(!busy);
     }
 
     @Override

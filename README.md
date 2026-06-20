@@ -13,6 +13,8 @@ The first milestone is a stable photo-based flow, not video streaming:
 
 This repository currently contains a native Android Studio project with a mock adapter that runs without the official SDK. The real SDK adapter is intentionally isolated so the UI and accessibility flow can be tested before wiring the hardware APIs.
 
+The app now also includes an optional Gemini AI vision analyzer. With a local API key, a user can select a real phone photo and receive an actual model-generated risk assessment. Without a key, or when the API fails, the UI clearly identifies the Mock fallback. See `docs/gemini-ai-setup.md`.
+
 ## Current Workspace Note
 
 The Codex workspace checked in this session is:

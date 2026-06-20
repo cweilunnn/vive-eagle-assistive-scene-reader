@@ -1,9 +1,14 @@
 package tw.edu.nchu.viveeagle.assistivereader.vision;
 
-public class MockSceneAnalyzer {
+public class MockSceneAnalyzer implements SceneAnalyzer {
     private int resultIndex;
 
-    public SceneAnalysisResult analyze(byte[] imageBytes) {
+    @Override
+    public void analyze(byte[] imageBytes, String mimeType, Callback callback) {
+        callback.onSuccess(nextResult());
+    }
+
+    public SceneAnalysisResult nextResult() {
         int current = resultIndex;
         resultIndex = (resultIndex + 1) % 4;
 
@@ -37,5 +42,19 @@ public class MockSceneAnalyzer {
                 "Mock AI 結果：前方地面出現連續水平邊緣，可能是階梯或斜坡。請停下，用手杖或同行者確認。",
                 "危險，前方疑似階梯或高低差。請停下確認。"
         );
+    }
+
+    @Override
+    public String displayName() {
+        return "Mock 預設情境";
+    }
+
+    @Override
+    public boolean isRealAi() {
+        return false;
+    }
+
+    @Override
+    public void release() {
     }
 }

@@ -2,6 +2,19 @@ plugins {
     id "com.android.application"
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
+def escapeBuildConfig = { value ->
+    value.replace("\\", "\\\\").replace('"', '\\"')
+}
+
+def geminiApiKey = escapeBuildConfig(localProperties.getProperty("GEMINI_API_KEY", ""))
+def geminiModel = escapeBuildConfig(localProperties.getProperty("GEMINI_MODEL", "gemini-2.5-flash"))
+
 android {
     namespace "tw.edu.nchu.viveeagle.assistivereader"
     compileSdk 35
@@ -12,6 +25,12 @@ android {
         targetSdk 35
         versionCode 1
         versionName "0.1.0"
+
+        buildConfigField "String", "GEMINI_API_KEY", "\"${geminiApiKey}\""
+        buildConfigField "String", "GEMINI_MODEL", "\"${geminiModel}\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 }
-

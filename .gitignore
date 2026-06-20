@@ -9,3 +9,10 @@ app/libs/*.aar
 app/libs/*.jar
 !app/libs/README.md
 
+# Local presentation/document QA artifacts
+presentation-source.pptx
+pptx_media/
+speaker_notes_*.md
+student_honest_*.md
+student_honest_*.docx
+VIVE_Eagle_Assistive_Vision_*speaker_notes*.docx
