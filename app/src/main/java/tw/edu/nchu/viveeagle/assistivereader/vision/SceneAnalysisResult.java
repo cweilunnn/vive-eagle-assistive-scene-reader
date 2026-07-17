@@ -5,11 +5,28 @@ public class SceneAnalysisResult {
     public final String headline;
     public final String detail;
     public final String spokenText;
+    public final String fullResponse;
 
-    public SceneAnalysisResult(SceneRiskLevel riskLevel, String headline, String detail, String spokenText) {
+    public SceneAnalysisResult(
+            SceneRiskLevel riskLevel,
+            String headline,
+            String detail,
+            String spokenText
+    ) {
+        this(riskLevel, headline, detail, spokenText, "");
+    }
+
+    public SceneAnalysisResult(
+            SceneRiskLevel riskLevel,
+            String headline,
+            String detail,
+            String spokenText,
+            String fullResponse
+    ) {
         this.riskLevel = riskLevel;
         this.headline = headline;
         this.detail = detail;
         this.spokenText = spokenText;
+        this.fullResponse = fullResponse == null ? "" : fullResponse;
     }
 }

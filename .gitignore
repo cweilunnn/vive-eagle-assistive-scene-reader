@@ -3,6 +3,13 @@
 build/
 local.properties
 *.iml
+*.apk
+*.aab
+*.jks
+*.keystore
+*.log
+~$*
+captures/
 
 app/build/
 app/libs/*.aar
@@ -10,9 +17,12 @@ app/libs/*.jar
 !app/libs/README.md
 
 # Local presentation/document QA artifacts
+*.pptx
+*.docx
 presentation-source.pptx
 pptx_media/
 speaker_notes_*.md
+*_speaker_notes.md
 student_honest_*.md
 student_honest_*.docx
 VIVE_Eagle_Assistive_Vision_*speaker_notes*.docx

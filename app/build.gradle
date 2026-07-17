@@ -12,7 +12,7 @@ def escapeBuildConfig = { value ->
     value.replace("\\", "\\\\").replace('"', '\\"')
 }
 
-def geminiApiKey = escapeBuildConfig(localProperties.getProperty("GEMINI_API_KEY", ""))
+def geminiApiKey = escapeBuildConfig(localProperties.getProperty("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY") ?: ""))
 def geminiModel = escapeBuildConfig(localProperties.getProperty("GEMINI_MODEL", "gemini-2.5-flash"))
 
 android {

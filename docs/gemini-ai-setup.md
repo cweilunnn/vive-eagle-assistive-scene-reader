@@ -1,8 +1,8 @@
 # Gemini AI Vision Setup
 
-The app can send a selected or captured image to the Gemini Developer API and convert the response into a conservative accessibility alert.
+The app sends a selected, captured, or latest-gallery image to the Gemini Developer API and converts the response into a concise Traditional Chinese accessibility alert.
 
-## 1. Create a free API key
+## 1. Create an API key
 
 Open Google AI Studio:
 
@@ -19,24 +19,25 @@ GEMINI_API_KEY=PASTE_YOUR_KEY_HERE
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-Do not put the key in Java source, README examples with a real value, or GitHub. `local.properties` is already ignored by Git.
+Do not put a real key in Java source, README examples, screenshots, or GitHub. `local.properties` is ignored by Git.
 
-After editing the key, run **Sync Project with Gradle Files**, then rebuild and reinstall the app.
+After editing the key, rebuild and reinstall the app.
 
 ## 3. Test with a real photo
 
-1. Open the app on the ASUS phone.
-2. Confirm the screen says `分析模式：Gemini AI 真實影像分析`.
-3. Tap `選擇真實照片給 AI`.
-4. Select a street or indoor scene photo from the phone.
-5. Wait for the image, risk color, Traditional Chinese result, and spoken alert.
+1. Open the app on an Android phone.
+2. Confirm the screen says `AI 模式：Gemini AI 真實影像分析`.
+3. Use one of these buttons:
+   - `一鍵分析最新相簿照片`
+   - `一鍵示範內建街景照片`
+   - `手動選照片`
+4. Wait for the large concise result, smaller detail text, complete Gemini response, and spoken alert.
 
-If the screen says `Mock 預設情境`, the API key was not included in the build. If the API call fails, the app explicitly labels the result as Mock fallback.
+If the screen says the API key is missing, check `local.properties`, rebuild, and reinstall.
 
 ## Safety and key security
 
-- AI output can be wrong. This is an experimental assistive prompt, not navigation or a safety guarantee.
+- AI output can be wrong. This is an experimental assistive prompt, not a safety guarantee.
 - For a classroom demo, embedding a restricted API key in the APK is acceptable with caution. An APK can still be reverse-engineered.
 - For a real product, call Gemini through your own backend. Never ship an unrestricted provider key inside the mobile app.
 - Avoid uploading private or sensitive images. Public-space photography may involve bystanders and privacy concerns.
-

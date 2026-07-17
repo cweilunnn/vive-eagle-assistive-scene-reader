@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1100" viewBox="0 0 1700 1100">
+  <rect width="1700" height="1100" fill="#fbfcff"/>
+  <defs>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto">
+      <path d="M 0 0 L 14 7 L 0 14 z" fill="#334155"/>
+    </marker>
+    <style>
+      .node { fill:#ffffff; stroke:#8da2c0; stroke-width:3; rx:18; }
+      .good { fill:#eaf8ef; stroke:#2f9e62; stroke-width:4; rx:18; }
+      .risk { fill:#fff3df; stroke:#d98400; stroke-width:4; rx:18; }
+      .title { font-family:Arial,'Microsoft JhengHei',sans-serif; font-size:42px; font-weight:700; fill:#172033; }
+      .subtitle { font-family:Arial,'Microsoft JhengHei',sans-serif; font-size:23px; fill:#526070; }
+      .text { font-family:Arial,'Microsoft JhengHei',sans-serif; font-size:24px; font-weight:700; fill:#172033; }
+      .small { font-family:Arial,'Microsoft JhengHei',sans-serif; font-size:18px; fill:#526070; }
+      .loop { font-family:Arial,'Microsoft JhengHei',sans-serif; font-size:24px; font-weight:700; fill:#ffffff; }
+      .edge { stroke:#334155; stroke-width:4; fill:none; marker-end:url(#arrow); }
+      .pos { font-family:Arial,'Microsoft JhengHei',sans-serif; font-size:26px; font-weight:700; fill:#15803d; }
+      .neg { font-family:Arial,'Microsoft JhengHei',sans-serif; font-size:28px; font-weight:700; fill:#b42318; }
+      .delay { font-family:Arial,'Microsoft JhengHei',sans-serif; font-size:18px; font-weight:700; fill:#7c3aed; }
+    </style>
+  </defs>
+
+  <text class="title" x="850" y="65" text-anchor="middle">智慧眼鏡科技對生活的因果關係圖</text>
+  <text class="subtitle" x="850" y="105" text-anchor="middle">+ 正相關　- 負相關　Delay 時間延遲　R 強化迴路　B 平衡迴路</text>
+
+  <rect class="good" x="120" y="190" width="230" height="95"/>
+  <text class="text" x="235" y="247" text-anchor="middle">路況辨識準確度</text>
+
+  <rect class="good" x="470" y="190" width="220" height="95"/>
+  <text class="text" x="580" y="247" text-anchor="middle">提醒清楚度</text>
+
+  <rect class="good" x="810" y="190" width="220" height="95"/>
+  <text class="text" x="920" y="247" text-anchor="middle">使用者信任</text>
+
+  <rect class="good" x="1160" y="190" width="220" height="95"/>
+  <text class="text" x="1270" y="247" text-anchor="middle">使用頻率</text>
+
+  <rect class="node" x="1320" y="420" width="220" height="95"/>
+  <text class="text" x="1430" y="477" text-anchor="middle">使用回饋</text>
+
+  <rect class="node" x="920" y="420" width="220" height="95"/>
+  <text class="text" x="1030" y="477" text-anchor="middle">系統改善</text>
+
+  <rect class="good" x="500" y="420" width="240" height="95"/>
+  <text class="text" x="620" y="477" text-anchor="middle">生活獨立性</text>
+
+  <rect class="good" x="810" y="650" width="220" height="95"/>
+  <text class="text" x="920" y="707" text-anchor="middle">外出意願</text>
+
+  <rect class="risk" x="1160" y="650" width="230" height="95"/>
+  <text class="text" x="1275" y="707" text-anchor="middle">誤判風險暴露</text>
+
+  <rect class="risk" x="1160" y="850" width="230" height="95"/>
+  <text class="text" x="1275" y="907" text-anchor="middle">隱私疑慮</text>
+
+  <rect class="risk" x="420" y="850" width="230" height="95"/>
+  <text class="text" x="535" y="907" text-anchor="middle">過度依賴 AI</text>
+
+  <rect class="node" x="90" y="850" width="250" height="95"/>
+  <text class="text" x="215" y="890" text-anchor="middle">自主判斷</text>
+  <text class="text" x="215" y="920" text-anchor="middle">與陪同安全</text>
+
+  <path class="edge" d="M350 238 C395 238 425 238 465 238"/>
+  <text class="pos" x="405" y="226">+</text>
+
+  <path class="edge" d="M690 238 C735 238 765 238 805 238"/>
+  <text class="pos" x="745" y="226">+</text>
+
+  <path class="edge" d="M1030 238 C1075 238 1110 238 1155 238"/>
+  <text class="pos" x="1088" y="226">+</text>
+
+  <path class="edge" d="M1270 285 C1305 345 1360 365 1415 415"/>
+  <text class="pos" x="1345" y="348">+</text>
+
+  <path class="edge" d="M1320 468 C1265 468 1210 468 1145 468"/>
+  <text class="pos" x="1225" y="455">+</text>
+  <text class="delay" x="1210" y="490">Delay</text>
+
+  <path class="edge" d="M920 468 C700 390 460 350 260 290"/>
+  <text class="pos" x="715" y="382">+</text>
+  <text class="delay" x="690" y="407">Delay</text>
+
+  <path class="edge" d="M580 285 C585 340 600 375 615 415"/>
+  <text class="pos" x="604" y="352">+</text>
+
+  <path class="edge" d="M740 468 C805 510 870 580 905 645"/>
+  <text class="pos" x="820" y="555">+</text>
+
+  <path class="edge" d="M920 285 C915 410 915 540 920 645"/>
+  <text class="pos" x="935" y="455">+</text>
+  <text class="delay" x="945" y="485">Delay</text>
+
+  <path class="edge" d="M1030 698 C1080 698 1115 698 1155 698"/>
+  <text class="pos" x="1090" y="685">+</text>
+
+  <path class="edge" d="M1275 650 C1270 520 1270 400 1270 290"/>
+  <text class="pos" x="1290" y="525">+</text>
+
+  <path class="edge" d="M1160 698 C1045 610 980 440 930 290"/>
+  <text class="neg" x="1040" y="548">-</text>
+
+  <path class="edge" d="M1270 285 C1330 480 1330 690 1280 845"/>
+  <text class="pos" x="1350" y="595">+</text>
+
+  <path class="edge" d="M1160 898 C1020 760 965 510 925 290"/>
+  <text class="neg" x="1030" y="735">-</text>
+
+  <path class="edge" d="M1160 245 C920 760 710 845 655 892"/>
+  <text class="pos" x="830" y="805">+</text>
+
+  <path class="edge" d="M420 898 C390 898 370 898 345 898"/>
+  <text class="neg" x="380" y="884">-</text>
+
+  <path class="edge" d="M215 850 C380 680 635 450 810 280"/>
+  <text class="pos" x="430" y="680">+</text>
+
+  <circle cx="240" cy="380" r="44" fill="#15803d"/>
+  <text class="loop" x="240" y="374" text-anchor="middle">R1</text>
+  <text class="small" x="240" y="402" text-anchor="middle" fill="#fff">越用越好</text>
+
+  <circle cx="590" cy="650" r="44" fill="#15803d"/>
+  <text class="loop" x="590" y="644" text-anchor="middle">R2</text>
+  <text class="small" x="590" y="672" text-anchor="middle" fill="#fff">生活自信</text>
+
+  <circle cx="1490" cy="650" r="44" fill="#b45309"/>
+  <text class="loop" x="1490" y="644" text-anchor="middle">B1</text>
+  <text class="small" x="1490" y="672" text-anchor="middle" fill="#fff">誤判限制</text>
+
+  <circle cx="1490" cy="890" r="44" fill="#b45309"/>
+  <text class="loop" x="1490" y="884" text-anchor="middle">B2</text>
+  <text class="small" x="1490" y="912" text-anchor="middle" fill="#fff">隱私限制</text>
+
+  <rect x="90" y="1010" width="1520" height="58" rx="14" fill="#eef4ff" stroke="#b8c7dd" stroke-width="2"/>
+  <text class="small" x="120" y="1046">讀圖方式：箭頭旁的 + / - 代表變數之間的變動方向；Delay 代表效果需要時間才看得出來。R 是強化迴路，B 是平衡迴路。</text>
+</svg>

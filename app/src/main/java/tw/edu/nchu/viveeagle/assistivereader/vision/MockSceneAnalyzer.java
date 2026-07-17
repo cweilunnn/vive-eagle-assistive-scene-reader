@@ -8,45 +8,45 @@ public class MockSceneAnalyzer implements SceneAnalyzer {
         callback.onSuccess(nextResult());
     }
 
-    public SceneAnalysisResult nextResult() {
+    private SceneAnalysisResult nextResult() {
         int current = resultIndex;
         resultIndex = (resultIndex + 1) % 4;
 
         if (current == 0) {
             return new SceneAnalysisResult(
                     SceneRiskLevel.SAFE,
-                    "安全：前方可通行，請靠右慢行。",
-                    "Mock AI 結果：前方人行道清楚，未偵測到立即障礙。請維持慢速，靠右前進。",
-                    "安全，前方可通行，請靠右慢行。"
+                    "安全：可通行",
+                    "前方人行道清楚，沒有立即障礙。請維持慢速，靠右前進。",
+                    "安全，可通行，請靠右慢行。"
             );
         }
         if (current == 1) {
             return new SceneAnalysisResult(
                     SceneRiskLevel.CAUTION,
-                    "注意：左前方疑似停放機車。",
-                    "Mock AI 結果：左前方約 2 公尺有障礙物，右側仍有可通行空間。請放慢速度，稍微往右。",
-                    "注意，左前方疑似停放機車。請放慢速度，稍微往右。"
+                    "注意：前方障礙",
+                    "機車占用部分人行道，左側仍可通過。請放慢並留意車身邊緣。",
+                    "注意前方障礙，請靠左慢行。"
             );
         }
         if (current == 2) {
             return new SceneAnalysisResult(
-                    SceneRiskLevel.DANGER,
-                    "危險：前方疑似路口，請先停下。",
-                    "Mock AI 結果：前方道路開口較大，可能是路口或車道出入口。請先停下，確認車流聲或請同行者協助。",
-                    "危險，前方疑似路口，請先停下確認。"
+                    SceneRiskLevel.CAUTION,
+                    "注意：路徑變窄",
+                    "施工錐與圍欄讓通道變窄。請減速，確認左側空間再通過。",
+                    "注意路徑變窄，請減速。"
             );
         }
         return new SceneAnalysisResult(
                 SceneRiskLevel.DANGER,
-                "危險：前方疑似階梯或高低差。",
-                "Mock AI 結果：前方地面出現連續水平邊緣，可能是階梯或斜坡。請停下，用手杖或同行者確認。",
-                "危險，前方疑似階梯或高低差。請停下確認。"
+                "危險：請停下",
+                "前方有階梯或落差，可能絆倒。請先停下，改由旁人協助確認路線。",
+                "危險，前方落差，請停下。"
         );
     }
 
     @Override
     public String displayName() {
-        return "Mock 預設情境";
+        return "離線備援";
     }
 
     @Override

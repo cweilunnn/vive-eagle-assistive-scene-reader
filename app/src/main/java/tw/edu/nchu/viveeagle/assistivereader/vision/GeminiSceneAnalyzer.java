@@ -21,15 +21,15 @@ import java.util.concurrent.Executors;
 
 public final class GeminiSceneAnalyzer implements SceneAnalyzer {
     private static final String PROMPT =
-            "你是低視能使用者的保守型場景提醒助手。只根據照片中清楚可見的內容判斷，"
-                    + "不可宣稱路線絕對安全，也不可取代白手杖、同行者或使用者判斷。"
-                    + "優先檢查：階梯或高低差、車輛或機車、被占用的行走空間、路口、施工與近距離障礙。"
-                    + "若不確定，選 CAUTION 並明確說不確定。"
-                    + "只回傳 JSON，不要 Markdown。欄位固定為："
-                    + "riskLevel（SAFE、CAUTION、DANGER 三選一）、"
-                    + "headline（繁體中文，30 字內）、detail（繁體中文，100 字內）、"
-                    + "spokenText（繁體中文，60 字內，適合立即朗讀）。"
-                    + "SAFE 只代表未看見明顯立即危險，仍要提醒慢行確認。";
+            "你是給視障行人使用的第一視角街景安全判斷助手。"
+                    + "請只根據照片中接下來 2 到 5 公尺的行走路徑判斷，不要描述無關背景。"
+                    + "輸出繁體中文 JSON，不要 Markdown，不要多餘文字。"
+                    + "riskLevel 只能是 SAFE、CAUTION、DANGER。"
+                    + "headline 必須 14 個中文字以內，格式如「安全：可通行」、「注意：前方障礙」、「危險：請停下」。"
+                    + "detail 必須 80 個中文字以內，說明障礙、方向與動作建議。"
+                    + "spokenText 必須 36 個中文字以內，適合直接朗讀。"
+                    + "若不確定，選 CAUTION。"
+                    + "JSON 欄位：riskLevel, headline, detail, spokenText。";
 
     private final String apiKey;
     private final String model;
@@ -43,59 +43,79 @@ public final class GeminiSceneAnalyzer implements SceneAnalyzer {
     @Override
     public void analyze(byte[] imageBytes, String mimeType, Callback callback) {
         executor.execute(() -> {
-            HttpURLConnection connection = null;
-            try {
-                byte[] preparedImage = prepareAsJpeg(imageBytes);
-                String encodedImage = Base64.encodeToString(preparedImage, Base64.NO_WRAP);
-
-                JSONObject textPart = new JSONObject().put("text", PROMPT);
-                JSONObject imagePart = new JSONObject().put(
-                        "inline_data",
-                        new JSONObject()
-                                .put("mime_type", "image/jpeg")
-                                .put("data", encodedImage)
-                );
-                JSONObject body = new JSONObject()
-                        .put("contents", new JSONArray().put(
-                                new JSONObject().put("parts", new JSONArray().put(textPart).put(imagePart))
-                        ))
-                        .put("generationConfig", new JSONObject()
-                                .put("temperature", 0.1)
-                                .put("responseMimeType", "application/json"));
-
-                URL url = new URL(
-                        "https://generativelanguage.googleapis.com/v1beta/models/"
-                                + model + ":generateContent?key=" + apiKey
-                );
-                connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("POST");
-                connection.setConnectTimeout(20_000);
-                connection.setReadTimeout(45_000);
-                connection.setDoOutput(true);
-                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-
-                try (OutputStream output = connection.getOutputStream()) {
-                    output.write(body.toString().getBytes(StandardCharsets.UTF_8));
-                }
-
-                int status = connection.getResponseCode();
-                InputStream stream = status >= 200 && status < 300
-                        ? connection.getInputStream()
-                        : connection.getErrorStream();
-                String response = readFully(stream);
-                if (status < 200 || status >= 300) {
-                    throw new IllegalStateException("Gemini API HTTP " + status + ": " + compact(response));
-                }
-
-                callback.onSuccess(parseResult(response));
-            } catch (Exception exception) {
-                callback.onError("AI 影像分析失敗：" + exception.getMessage(), exception);
-            } finally {
-                if (connection != null) {
-                    connection.disconnect();
+            Exception lastException = null;
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    callback.onSuccess(requestAnalysis(imageBytes));
+                    return;
+                } catch (Exception exception) {
+                    lastException = exception;
+                    if (attempt == 1) {
+                        try {
+                            Thread.sleep(700);
+                        } catch (InterruptedException interruptedException) {
+                            Thread.currentThread().interrupt();
+                            callback.onError("AI 分析中斷：" + interruptedException.getMessage(), interruptedException);
+                            return;
+                        }
+                    }
                 }
             }
+            callback.onError("AI 分析失敗：" + (lastException == null ? "未知錯誤" : lastException.getMessage()), lastException);
         });
+    }
+
+    private SceneAnalysisResult requestAnalysis(byte[] imageBytes) throws Exception {
+        HttpURLConnection connection = null;
+        try {
+            byte[] preparedImage = prepareAsJpeg(imageBytes);
+            String encodedImage = Base64.encodeToString(preparedImage, Base64.NO_WRAP);
+
+            JSONObject textPart = new JSONObject().put("text", PROMPT);
+            JSONObject imagePart = new JSONObject().put(
+                    "inline_data",
+                    new JSONObject()
+                            .put("mime_type", "image/jpeg")
+                            .put("data", encodedImage)
+            );
+            JSONObject body = new JSONObject()
+                    .put("contents", new JSONArray().put(
+                            new JSONObject().put("parts", new JSONArray().put(textPart).put(imagePart))
+                    ))
+                    .put("generationConfig", new JSONObject()
+                            .put("temperature", 0.1)
+                            .put("responseMimeType", "application/json"));
+
+            URL url = new URL(
+                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                            + model + ":generateContent?key=" + apiKey
+            );
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(25_000);
+            connection.setReadTimeout(60_000);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+
+            try (OutputStream output = connection.getOutputStream()) {
+                output.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            }
+
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 200 && status < 300
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+            String response = readFully(stream);
+            if (status < 200 || status >= 300) {
+                throw new IllegalStateException("Gemini API HTTP " + status + ": " + compact(response));
+            }
+
+            return parseResult(response);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
     }
 
     private SceneAnalysisResult parseResult(String response) throws Exception {
@@ -123,24 +143,25 @@ public final class GeminiSceneAnalyzer implements SceneAnalyzer {
 
         return new SceneAnalysisResult(
                 riskLevel,
-                limit(result.optString("headline", "AI 無法確認場景，請先停下。"), 40),
-                "Gemini AI：" + limit(result.optString("detail", "照片資訊不足，請重新拍攝或請同行者確認。"), 140),
-                limit(result.optString("spokenText", "無法確認前方狀況，請先停下。"), 80)
+                limit(nonEmpty(result.optString("headline"), fallbackHeadline(riskLevel)), 18),
+                limit(nonEmpty(result.optString("detail"), "請放慢速度，確認前方路況後再前進。"), 90),
+                limit(nonEmpty(result.optString("spokenText"), fallbackHeadline(riskLevel)), 40),
+                prettyJsonOrRaw(text)
         );
     }
 
     private byte[] prepareAsJpeg(byte[] imageBytes) throws Exception {
         Bitmap decoded = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
         if (decoded == null) {
-            throw new IllegalArgumentException("照片格式無法讀取");
+            throw new IllegalArgumentException("照片無法讀取");
         }
 
         int width = decoded.getWidth();
         int height = decoded.getHeight();
         int maxDimension = Math.max(width, height);
         Bitmap prepared = decoded;
-        if (maxDimension > 1280) {
-            float scale = 1280f / maxDimension;
+        if (maxDimension > 768) {
+            float scale = 768f / maxDimension;
             prepared = Bitmap.createScaledBitmap(
                     decoded,
                     Math.max(1, Math.round(width * scale)),
@@ -150,7 +171,7 @@ public final class GeminiSceneAnalyzer implements SceneAnalyzer {
         }
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        prepared.compress(Bitmap.CompressFormat.JPEG, 82, output);
+        prepared.compress(Bitmap.CompressFormat.JPEG, 72, output);
         if (prepared != decoded) {
             prepared.recycle();
         }
@@ -177,14 +198,36 @@ public final class GeminiSceneAnalyzer implements SceneAnalyzer {
         return value == null ? "" : value.replaceAll("\\s+", " ").trim();
     }
 
+    private String nonEmpty(String value, String fallback) {
+        return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private String fallbackHeadline(SceneRiskLevel riskLevel) {
+        if (riskLevel == SceneRiskLevel.SAFE) {
+            return "安全：可通行";
+        }
+        if (riskLevel == SceneRiskLevel.DANGER) {
+            return "危險：請停下";
+        }
+        return "注意：請慢行";
+    }
+
     private String limit(String value, int maxLength) {
         String trimmed = value == null ? "" : value.trim();
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
+    private String prettyJsonOrRaw(String value) {
+        try {
+            return new JSONObject(value).toString(2);
+        } catch (Exception ignored) {
+            return value;
+        }
+    }
+
     @Override
     public String displayName() {
-        return "Gemini AI 真實影像分析";
+        return "Gemini AI";
     }
 
     @Override

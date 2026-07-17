@@ -3,9 +3,11 @@ package tw.edu.nchu.viveeagle.assistivereader;
 import android.Manifest;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -13,6 +15,7 @@ import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.widget.Button;
@@ -21,9 +24,9 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import java.text.SimpleDateFormat;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -34,37 +37,46 @@ import tw.edu.nchu.viveeagle.assistivereader.eagle.ConnectionState;
 import tw.edu.nchu.viveeagle.assistivereader.eagle.EagleAdapterFactory;
 import tw.edu.nchu.viveeagle.assistivereader.eagle.EagleEventListener;
 import tw.edu.nchu.viveeagle.assistivereader.eagle.EagleSdkAdapter;
-import tw.edu.nchu.viveeagle.assistivereader.vision.MockSceneAnalyzer;
+import tw.edu.nchu.viveeagle.assistivereader.vision.SceneAnalysisResult;
 import tw.edu.nchu.viveeagle.assistivereader.vision.SceneAnalyzer;
 import tw.edu.nchu.viveeagle.assistivereader.vision.SceneAnalyzerFactory;
-import tw.edu.nchu.viveeagle.assistivereader.vision.SceneAnalysisResult;
 import tw.edu.nchu.viveeagle.assistivereader.vision.SceneRiskLevel;
 
 public class MainActivity extends Activity implements EagleEventListener {
     private static final int REQUEST_PERMISSIONS = 1101;
     private static final int REQUEST_PICK_IMAGE = 1102;
 
+    private final int[] demoStreetImages = new int[] {
+            R.drawable.demo_street_safe,
+            R.drawable.demo_street_scooter,
+            R.drawable.demo_street_construction,
+            R.drawable.demo_street_drop
+    };
+
     private EagleSdkAdapter eagleAdapter;
     private SceneAnalyzer sceneAnalyzer;
-    private final MockSceneAnalyzer mockFallbackAnalyzer = new MockSceneAnalyzer();
+
     private TextView connectionStatus;
     private TextView permissionStatus;
     private TextView analysisModeStatus;
     private TextView primaryResult;
     private TextView detailResult;
+    private TextView fullResponseResult;
     private TextView eventLog;
     private ImageView capturedImage;
-    private Button connectButton;
+    private Button latestGalleryButton;
+    private Button demoButton;
     private Button captureButton;
     private Button selectPhotoButton;
-    private Button speakButton;
+    private String lastSpokenText = "尚未有分析結果";
+    private int demoImageIndex;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         eagleAdapter = EagleAdapterFactory.create(this);
         sceneAnalyzer = SceneAnalyzerFactory.create();
-        buildHighContrastUi();
+        buildUi();
         refreshPermissionStatus();
     }
 
@@ -72,80 +84,82 @@ public class MainActivity extends Activity implements EagleEventListener {
     protected void onDestroy() {
         eagleAdapter.release();
         sceneAnalyzer.release();
-        mockFallbackAnalyzer.release();
         super.onDestroy();
     }
 
-    private void buildHighContrastUi() {
+    private void buildUi() {
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
         scrollView.setBackgroundColor(Color.BLACK);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(20), dp(20), dp(28));
+        root.setPadding(dp(20), dp(18), dp(20), dp(28));
         scrollView.addView(root);
 
-        TextView title = label("VIVE Eagle Assistive Scene Reader", 28, Color.WHITE);
+        TextView title = label("智慧眼鏡路況提醒 Demo", 28, Color.WHITE);
         title.setGravity(Gravity.START);
         root.addView(title);
 
-        connectionStatus = label("連線狀態：尚未連線", 24, Color.YELLOW);
+        TextView oneStepHint = label("主流程只要一鍵：眼鏡拍照並存到手機相簿後，按第一顆按鈕分析最新照片。", 18, Color.LTGRAY);
+        root.addView(oneStepHint);
+
+        latestGalleryButton = primaryButton("一鍵分析最新相簿照片");
+        latestGalleryButton.setOnClickListener(view -> analyzeLatestGalleryPhoto());
+        root.addView(latestGalleryButton);
+
+        demoButton = secondaryButton("一鍵示範內建街景照片");
+        demoButton.setOnClickListener(view -> analyzeNextDemoPhoto());
+        root.addView(demoButton);
+
+        connectionStatus = label("眼鏡連線：未連線", 20, Color.YELLOW);
         root.addView(connectionStatus);
 
-        permissionStatus = label("", 20, Color.WHITE);
+        permissionStatus = label("", 16, Color.WHITE);
         root.addView(permissionStatus);
 
-        analysisModeStatus = label(
-                "分析模式：" + sceneAnalyzer.displayName(),
-                20,
-                sceneAnalyzer.isRealAi() ? Color.GREEN : Color.YELLOW
-        );
+        analysisModeStatus = label(analysisModeText(), 18, sceneAnalyzer.isRealAi() ? Color.GREEN : Color.YELLOW);
         root.addView(analysisModeStatus);
 
-        connectButton = actionButton("連線眼鏡");
+        Button connectButton = compactButton("連線眼鏡");
         connectButton.setOnClickListener(view -> connectToGlasses());
         root.addView(connectButton);
 
-        captureButton = actionButton("模擬眼鏡拍照");
-        captureButton.setOnClickListener(view -> captureFromGlasses("手機按鈕"));
+        captureButton = compactButton("從眼鏡取照分析");
+        captureButton.setOnClickListener(view -> captureFromGlasses("眼鏡即時取照"));
         root.addView(captureButton);
 
-        selectPhotoButton = actionButton("選擇真實照片給 AI");
+        selectPhotoButton = compactButton("手動選照片");
         selectPhotoButton.setOnClickListener(view -> selectPhotoForAi());
         root.addView(selectPhotoButton);
 
-        speakButton = actionButton("重念提醒");
+        Button speakButton = compactButton("重念提醒");
         speakButton.setOnClickListener(view -> speakCurrentResult());
         root.addView(speakButton);
 
-        primaryResult = label("等待拍照。按眼鏡按鍵或手機按鈕開始。", 32, Color.WHITE);
-        primaryResult.setGravity(Gravity.START);
-        root.addView(primaryResult);
-
-        detailResult = label(
-                sceneAnalyzer.isRealAi()
-                        ? "可選擇手機中的真實照片交給 Gemini AI 分析。AI 只提供輔助提醒，不可取代白手杖或人類判斷。"
-                        : "尚未設定 Gemini API key，目前使用 Mock 預設情境。",
-                22,
-                Color.WHITE
-        );
-        root.addView(detailResult);
-
         capturedImage = new ImageView(this);
-        capturedImage.setBackgroundColor(Color.DKGRAY);
-        capturedImage.setContentDescription("最近一次眼鏡拍攝的照片");
+        capturedImage.setBackgroundColor(Color.rgb(24, 24, 24));
+        capturedImage.setContentDescription("目前分析照片");
         capturedImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        capturedImage.setAdjustViewBounds(true);
         LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(220)
+                dp(260)
         );
-        imageParams.setMargins(0, dp(12), 0, dp(12));
+        imageParams.setMargins(0, dp(14), 0, dp(10));
         capturedImage.setLayoutParams(imageParams);
         root.addView(capturedImage);
 
-        eventLog = label("事件紀錄：\n", 18, Color.LTGRAY);
+        primaryResult = label("等待照片", 36, Color.WHITE);
+        primaryResult.setGravity(Gravity.START);
+        root.addView(primaryResult);
+
+        detailResult = label("建議 Demo 用法：先用眼鏡官方拍照功能讓照片進手機相簿，再回到本 App 按「一鍵分析最新相簿照片」。", 20, Color.LTGRAY);
+        root.addView(detailResult);
+
+        fullResponseResult = label("Gemini 完整回覆：\n尚未分析", 16, Color.rgb(180, 180, 180));
+        root.addView(fullResponseResult);
+
+        eventLog = label("事件紀錄：\n", 15, Color.GRAY);
         root.addView(eventLog);
 
         setContentView(scrollView);
@@ -156,24 +170,38 @@ public class MainActivity extends Activity implements EagleEventListener {
         textView.setText(text);
         textView.setTextSize(sp);
         textView.setTextColor(color);
-        textView.setLineSpacing(0, 1.15f);
-        textView.setPadding(0, dp(10), 0, dp(10));
+        textView.setLineSpacing(0, 1.12f);
+        textView.setPadding(0, dp(7), 0, dp(7));
         return textView;
     }
 
-    private Button actionButton(String text) {
+    private Button primaryButton(String text) {
+        Button button = baseButton(text, 24, Color.BLACK, Color.rgb(255, 235, 59), dp(76));
+        return button;
+    }
+
+    private Button secondaryButton(String text) {
+        Button button = baseButton(text, 22, Color.WHITE, Color.rgb(45, 118, 255), dp(68));
+        return button;
+    }
+
+    private Button compactButton(String text) {
+        return baseButton(text, 18, Color.BLACK, Color.rgb(220, 220, 220), dp(52));
+    }
+
+    private Button baseButton(String text, int sp, int textColor, int backgroundColor, int minHeight) {
         Button button = new Button(this);
         button.setText(text);
-        button.setTextSize(24);
-        button.setTextColor(Color.BLACK);
-        button.setBackgroundColor(Color.YELLOW);
+        button.setTextSize(sp);
+        button.setTextColor(textColor);
+        button.setBackgroundColor(backgroundColor);
         button.setAllCaps(false);
-        button.setMinHeight(dp(72));
+        button.setMinHeight(minHeight);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        params.setMargins(0, dp(10), 0, dp(10));
+        params.setMargins(0, dp(7), 0, dp(7));
         button.setLayoutParams(params);
         return button;
     }
@@ -184,35 +212,36 @@ public class MainActivity extends Activity implements EagleEventListener {
             return;
         }
         if (!isBluetoothEnabled()) {
-            appendLog("請先開啟手機 Bluetooth。");
+            appendLog("請先開啟 Bluetooth");
             startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));
             return;
         }
         if (!isLocationEnabled()) {
-            appendLog("Android 10 藍牙掃描通常需要開啟定位服務。");
+            appendLog("Android 10 掃描藍牙裝置需要開啟位置服務");
             startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
             return;
         }
-        appendLog("呼叫 connect()");
+        appendLog("connect()");
         eagleAdapter.connect(this);
     }
 
     private void captureFromGlasses(String trigger) {
         if (!eagleAdapter.isConnected()) {
-            appendLog(trigger + "：尚未連線，先執行 connect()");
+            appendLog("眼鏡尚未連線，先嘗試連線");
             connectToGlasses();
             return;
         }
-        primaryResult.setText("正在拍照，請保持手機與眼鏡連線。");
-        detailResult.setText("觸發來源：" + trigger + "\n等待 onImageCaptured()。");
-        appendLog(trigger + "：呼叫 captureImage()");
+        primaryResult.setText("取照中...");
+        primaryResult.setTextColor(Color.YELLOW);
+        detailResult.setText("照片來源：" + trigger + "\n正在等待眼鏡照片。");
+        fullResponseResult.setText("Gemini 完整回覆：\n等待分析中...");
+        appendLog("captureImage() - " + trigger);
         eagleAdapter.captureImage(CaptureQuality.MEDIUM);
     }
 
     private void speakCurrentResult() {
-        String text = primaryResult.getText().toString();
-        appendLog("呼叫 speakText()");
-        eagleAdapter.speakText(text, Locale.TAIWAN);
+        appendLog("speakText()");
+        eagleAdapter.speakText(lastSpokenText, Locale.TAIWAN);
     }
 
     private void selectPhotoForAi() {
@@ -220,6 +249,65 @@ public class MainActivity extends Activity implements EagleEventListener {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
         startActivityForResult(intent, REQUEST_PICK_IMAGE);
+    }
+
+    private void analyzeLatestGalleryPhoto() {
+        if (!hasGalleryPermission()) {
+            requestGalleryPermission();
+            return;
+        }
+
+        Uri latestImageUri = findLatestGalleryImage();
+        if (latestImageUri == null) {
+            onError("找不到手機相簿照片。請先用眼鏡或手機拍一張照片，確認照片有存進相簿。", null);
+            return;
+        }
+
+        try {
+            String mimeType = getContentResolver().getType(latestImageUri);
+            byte[] imageBytes;
+            try (InputStream input = getContentResolver().openInputStream(latestImageUri)) {
+                imageBytes = readBytes(input);
+            }
+            appendLog("讀取最新相簿照片：" + latestImageUri);
+            processImage(imageBytes, mimeType == null ? "image/jpeg" : mimeType, "手機相簿最新照片");
+        } catch (Exception exception) {
+            onError("讀取最新相簿照片失敗：" + exception.getMessage(), exception);
+        }
+    }
+
+    private void analyzeNextDemoPhoto() {
+        try {
+            int resourceId = demoStreetImages[demoImageIndex];
+            demoImageIndex = (demoImageIndex + 1) % demoStreetImages.length;
+            byte[] imageBytes = readResourceBytes(resourceId);
+            appendLog("讀取內建示範街景照片");
+            processImage(imageBytes, "image/png", "內建街景示範照片");
+        } catch (Exception exception) {
+            onError("讀取內建示範照片失敗：" + exception.getMessage(), exception);
+        }
+    }
+
+    private Uri findLatestGalleryImage() {
+        String[] projection = new String[] {
+                MediaStore.Images.Media._ID,
+                MediaStore.Images.Media.DATE_ADDED
+        };
+
+        try (Cursor cursor = getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                null,
+                null,
+                MediaStore.Images.Media.DATE_ADDED + " DESC"
+        )) {
+            if (cursor == null || !cursor.moveToFirst()) {
+                return null;
+            }
+            int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
+            long id = cursor.getLong(idColumn);
+            return ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
+        }
     }
 
     @Override
@@ -240,16 +328,22 @@ public class MainActivity extends Activity implements EagleEventListener {
             try (InputStream input = getContentResolver().openInputStream(imageUri)) {
                 imageBytes = readBytes(input);
             }
-            appendLog("已選擇真實照片：" + imageBytes.length + " bytes");
-            processImage(imageBytes, mimeType == null ? "image/jpeg" : mimeType);
+            appendLog("讀取手動選取照片：" + imageBytes.length + " bytes");
+            processImage(imageBytes, mimeType == null ? "image/jpeg" : mimeType, "手動選取照片");
         } catch (Exception exception) {
-            onError("讀取照片失敗：" + exception.getMessage(), exception);
+            onError("讀取手動選取照片失敗：" + exception.getMessage(), exception);
+        }
+    }
+
+    private byte[] readResourceBytes(int resourceId) throws Exception {
+        try (InputStream input = getResources().openRawResource(resourceId)) {
+            return readBytes(input);
         }
     }
 
     private byte[] readBytes(InputStream input) throws Exception {
         if (input == null) {
-            throw new IllegalArgumentException("無法開啟照片");
+            throw new IllegalArgumentException("照片資料是空的");
         }
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
@@ -262,14 +356,13 @@ public class MainActivity extends Activity implements EagleEventListener {
 
     private void refreshPermissionStatus() {
         StringBuilder status = new StringBuilder();
-        status.append("權限狀態：");
-        status.append(hasRequiredPermissions() ? "已授權" : "需要授權");
+        status.append("照片權限：").append(hasGalleryPermission() ? "已允許" : "需要允許");
         status.append("\nBluetooth：").append(isBluetoothEnabled() ? "已開啟" : "未開啟");
         status.append("\nLocation：").append(isLocationEnabled() ? "已開啟" : "未開啟");
         permissionStatus.setText(status.toString());
 
-        if (!hasRequiredPermissions()) {
-            requestNeededPermissions();
+        if (!hasGalleryPermission()) {
+            requestGalleryPermission();
         }
     }
 
@@ -280,6 +373,22 @@ public class MainActivity extends Activity implements EagleEventListener {
             }
         }
         return true;
+    }
+
+    private boolean hasGalleryPermission() {
+        String permission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                ? Manifest.permission.READ_MEDIA_IMAGES
+                : Manifest.permission.READ_EXTERNAL_STORAGE;
+        return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestGalleryPermission() {
+        String permission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                ? Manifest.permission.READ_MEDIA_IMAGES
+                : Manifest.permission.READ_EXTERNAL_STORAGE;
+        if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] { permission }, REQUEST_PERMISSIONS);
+        }
     }
 
     private void requestNeededPermissions() {
@@ -299,6 +408,11 @@ public class MainActivity extends Activity implements EagleEventListener {
         permissions.add(Manifest.permission.CAMERA);
         permissions.add(Manifest.permission.RECORD_AUDIO);
         permissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.READ_MEDIA_IMAGES);
+        } else {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT);
             permissions.add(Manifest.permission.BLUETOOTH_SCAN);
@@ -331,7 +445,7 @@ public class MainActivity extends Activity implements EagleEventListener {
     @Override
     public void onConnectionStateChanged(ConnectionState state) {
         runOnUiThread(() -> {
-            connectionStatus.setText("連線狀態：" + state.displayName());
+            connectionStatus.setText("眼鏡連線：" + state.displayName());
             connectionStatus.setTextColor(state == ConnectionState.CONNECTED ? Color.GREEN : Color.YELLOW);
             appendLog("onConnectionStateChanged(" + state.name() + ")");
         });
@@ -349,77 +463,63 @@ public class MainActivity extends Activity implements EagleEventListener {
     public void onImageCaptured(byte[] imageBytes) {
         runOnUiThread(() -> {
             appendLog("onImageCaptured(" + imageBytes.length + " bytes)");
-            processImage(imageBytes, "image/jpeg");
+            processImage(imageBytes, "image/png", "眼鏡即時照片");
         });
     }
 
-    private void processImage(byte[] imageBytes, String mimeType) {
+    private void processImage(byte[] imageBytes, String mimeType, String sourceLabel) {
         Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
         if (bitmap == null) {
-            onError("照片格式無法顯示。", null);
+            onError("照片無法顯示，請換一張圖片再試。", null);
             return;
         }
         capturedImage.setImageBitmap(bitmap);
-        primaryResult.setText(sceneAnalyzer.isRealAi() ? "AI 正在分析照片…" : "Mock 正在產生情境…");
+        primaryResult.setText("AI 分析中...");
         primaryResult.setTextColor(Color.YELLOW);
-        detailResult.setText("請稍候。分析模式：" + sceneAnalyzer.displayName());
+        detailResult.setText("照片來源：" + sourceLabel + "\n正在送給 Gemini 判斷路況。");
+        fullResponseResult.setText("Gemini 完整回覆：\n分析中...");
         setAnalysisBusy(true);
-        appendLog("開始分析：" + sceneAnalyzer.displayName());
+        appendLog("analyze() - " + sceneAnalyzer.displayName());
 
         sceneAnalyzer.analyze(imageBytes, mimeType, new SceneAnalyzer.Callback() {
             @Override
             public void onSuccess(SceneAnalysisResult result) {
                 runOnUiThread(() -> {
                     setAnalysisBusy(false);
-                    analysisModeStatus.setText("分析模式：" + sceneAnalyzer.displayName());
+                    analysisModeStatus.setText(analysisModeText());
                     analysisModeStatus.setTextColor(sceneAnalyzer.isRealAi() ? Color.GREEN : Color.YELLOW);
-                    applyAnalysisResult(result);
-                    appendLog("分析完成：" + result.riskLevel.name());
+                    applyAnalysisResult(result, sourceLabel, sceneAnalyzer.displayName());
+                    appendLog("analysis success: " + result.riskLevel.name());
                 });
             }
 
             @Override
             public void onError(String message, Throwable throwable) {
                 runOnUiThread(() -> {
+                    setAnalysisBusy(false);
                     appendLog(message);
-                    analysisModeStatus.setText("AI 失敗，本次改用 Mock 結果");
-                    analysisModeStatus.setTextColor(Color.RED);
-                    mockFallbackAnalyzer.analyze(imageBytes, mimeType, new SceneAnalyzer.Callback() {
-                        @Override
-                        public void onSuccess(SceneAnalysisResult result) {
-                            runOnUiThread(() -> {
-                                setAnalysisBusy(false);
-                                SceneAnalysisResult fallback = new SceneAnalysisResult(
-                                        result.riskLevel,
-                                        result.headline,
-                                        "注意：Gemini AI 呼叫失敗，本次為 Mock fallback。\n" + result.detail,
-                                        result.spokenText
-                                );
-                                applyAnalysisResult(fallback);
-                            });
-                        }
-
-                        @Override
-                        public void onError(String ignored, Throwable ignoredThrowable) {
-                            runOnUiThread(() -> {
-                                setAnalysisBusy(false);
-                                MainActivity.this.onError(message, throwable);
-                            });
-                        }
-                    });
+                    onError(message, throwable);
                 });
             }
         });
     }
 
-    private void applyAnalysisResult(SceneAnalysisResult result) {
+    private void applyAnalysisResult(SceneAnalysisResult result, String sourceLabel, String analyzerName) {
         primaryResult.setText(result.headline);
         primaryResult.setTextColor(colorForRisk(result.riskLevel));
-        detailResult.setText(result.detail);
+        detailResult.setText(result.detail + "\n\n來源：" + sourceLabel + " | 分析：" + analyzerName);
+        fullResponseResult.setText("Gemini 完整回覆：\n" + nonEmpty(result.fullResponse, "沒有額外完整回覆"));
+        lastSpokenText = result.spokenText;
         eagleAdapter.speakText(result.spokenText, Locale.TAIWAN);
     }
 
+    private String analysisModeText() {
+        return "AI 模式：" + sceneAnalyzer.displayName();
+    }
+
     private void setAnalysisBusy(boolean busy) {
+        latestGalleryButton.setEnabled(!busy);
+        demoButton.setEnabled(!busy);
         captureButton.setEnabled(!busy);
         selectPhotoButton.setEnabled(!busy);
     }
@@ -432,8 +532,10 @@ public class MainActivity extends Activity implements EagleEventListener {
     @Override
     public void onError(String message, Throwable throwable) {
         runOnUiThread(() -> {
-            primaryResult.setText("發生錯誤，請停在安全位置。");
+            primaryResult.setText("無法完成分析");
+            primaryResult.setTextColor(Color.RED);
             detailResult.setText(message);
+            fullResponseResult.setText("Gemini 完整回覆：\n請查看事件紀錄確認錯誤。");
             appendLog("Error: " + message);
         });
     }
@@ -441,6 +543,10 @@ public class MainActivity extends Activity implements EagleEventListener {
     private void appendLog(String message) {
         String time = new SimpleDateFormat("HH:mm:ss", Locale.TAIWAN).format(new Date());
         eventLog.append(time + "  " + message + "\n");
+    }
+
+    private String nonEmpty(String value, String fallback) {
+        return value == null || value.trim().isEmpty() ? fallback : value.trim();
     }
 
     private int dp(int value) {
@@ -451,9 +557,9 @@ public class MainActivity extends Activity implements EagleEventListener {
         if (riskLevel == SceneRiskLevel.SAFE) {
             return Color.GREEN;
         }
-        if (riskLevel == SceneRiskLevel.CAUTION) {
-            return Color.YELLOW;
+        if (riskLevel == SceneRiskLevel.DANGER) {
+            return Color.RED;
         }
-        return Color.RED;
+        return Color.YELLOW;
     }
 }
